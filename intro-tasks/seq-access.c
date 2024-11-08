@@ -39,7 +39,7 @@ int main (int argc, char *argv[]) {
 }
 
 void usage (const char *argv0) {
-    printf ("Usage: %s <num_threads> <N>\n", argv0);
+    printf ("Usage: %s <num_threads>\n", argv0);
 }
 
 int get_nthreads (const char *nthreads_str) {

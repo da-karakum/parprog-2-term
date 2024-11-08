@@ -48,7 +48,7 @@ int main (int argc, char *argv[]) {
 
     } // #pragma omp
 
-    printf ("Result = %.9f\n", result);
+    printf ("Result = %.17f\n", result);
 }
 
 double sum_worker (unsigned long from, unsigned long to) {
