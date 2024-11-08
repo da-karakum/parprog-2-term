@@ -3,8 +3,11 @@
 #include <errno.h>
 #include <omp.h>
 
+/* Print usage message. */
 void usage (const char *argv0);
 
+/* Parse int from nthreads_str and return. Return 0 if empty string. 
+   exit(1) if fails. */
 int get_nthreads (const char *nthreads_str);
 
 int main (int argc, char *argv[]) {
@@ -30,6 +33,8 @@ int main (int argc, char *argv[]) {
 
 void usage (const char *argv0) {
     printf ("Usage: %s <num_threads>\n", argv0);
+    printf ("num_threads: the number of threads. "
+            "0 or empty string defaults this value.\n");
     exit (1);
 }
 

@@ -3,15 +3,22 @@
 #include <errno.h>
 #include <omp.h>
 
+/* Print usage message. */
 void usage (const char *argv0);
 
+/* Parse an unsigned long from N_str, store to result. exit(1) if fails. */
 int getN (const char *N_str, unsigned long *result);
 
+/* Parse int from nthreads_str and return. Return 0 if empty string. 
+   exit(1) if fails. */
 int get_nthreads (const char *nthreads_str);
 
+/* Calculate section [*from, *to] which thread tid will work on. 
+   All threads get equal +-1 section lengths. */
 void calculateSection (unsigned long *from, unsigned long *to, unsigned long N,
                        int tid, int nthreads);
 
+/* Calculates sum for n from from to (to-1) 1/n. */
 double sum_worker (unsigned long from, unsigned long to);
 
 int main (int argc, char *argv[]) {
@@ -67,6 +74,8 @@ void calculateSection (unsigned long *from, unsigned long *to, unsigned long N,
 
 void usage (const char *argv0) {
     printf ("Usage: %s <num_threads> <N>\n", argv0);
+    printf ("num_threads: the number of threads. "
+            "0 or empty string defaults this value.\n");
 }
 
 int getN (const char *N_str, unsigned long *result) {
