@@ -1,0 +1,25 @@
+std::thread myThread (threadFunc, std::ref(a));
+    std::ref/cref использован для передачи по ссылке, а не по значению. 
+    Здесь возникает гонка как минимум между мастер потоком и myThread
+
+std::thread::id this_id = std::this_thread::get_id();
+                        = myThread.get_id();
+
+yield - предоставить приоритет другим потокам
+sleep_for, sleep_until
+и т.д.
+
+std::mutex m;
+m.lock(); m.unlock(); m.try_lock();
+ std::timed_mutex, std::recursive_mutex, ...
+ std::condition_variable
+ std::counting_semaphore, std::binary_semaphore, ...
+ std::atomic
+ std::jthread, ...
+ ...
+
+C++ concurrency in action - книга из серии smth in action
+
+lab1 - общий вариант и варианты 1d 2d 3e. Стремиться в индив. варианте к 
+эталонной производительности из общего варианта
+
