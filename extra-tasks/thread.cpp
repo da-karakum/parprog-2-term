@@ -120,30 +120,6 @@ int read_words (std::stringstream &ss, std::mutex &m_ss,
     m_ss.unlock ();
     return 0;
 }
-#if 0
-struct word_parser {
-    const size_t DEFAULT_STRSTRBUF_SIZE = 8192;
-    std::stringstream ss_;
-    std::ifstream &is_;
-    std::mutex &m_is_;
-
-    word_parser (std::ifstream &is, std::mutex &m_is):
-        is_(is), m_is_(m_is)
-    {}
-
-    void refill_strstream () {
-        if (!ss_.eof())
-            return;
-        ss_.
-        char buf [DEFAULT_STRSTRBUF_SIZE];
-    }
-
-    word get_word () {
-        refill_strstream ();
-        ss_ << is_.rdbuf ();
-    }
-};
-#endif
 
 void routine (std::stringstream &ss, std::mutex &m_ss, std::size_t &word_position, 
               std::mutex &m_word_position, const std::string &target, 
