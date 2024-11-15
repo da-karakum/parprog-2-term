@@ -6,15 +6,17 @@
 #include <list>
 #include <string>
 #include <semaphore>
+#include <sstream>
 
 void usage (const char *);
 int get_nthreads (const char *);
-void routine (std::ifstream &, std::mutex &, std::size_t &, std::mutex &, 
+void routine (std::stringstream &, std::mutex &, std::size_t &, std::mutex &, 
               const std::string &, std::counting_semaphore<INT32_MAX> &);
 
 
 
 int main (int argc, char *argv []) {
+
     if (argc != 4) {
         usage (argv[0]);
         exit (EXIT_FAILURE);
@@ -28,7 +30,14 @@ int main (int argc, char *argv []) {
 
     /* Shared ifstream for file and its mutex. */
     std::ifstream is (argv[3]);
-    std::mutex m_is;
+    std::stringstream ss;
+    if (!is) {
+        std::cout << "Error opening file\n";
+        return EXIT_FAILURE;
+    }
+    ss << is.rdbuf ();
+    is.close ();
+    std::mutex m_ss;
 
     /* Shared current word position variable and its mutex. */
     std::size_t word_position = (std::size_t)(-1);
@@ -42,7 +51,7 @@ int main (int argc, char *argv []) {
     /* Launch all threads. */
     std::list<std::thread> threads;
     for (int i = 0; i < nthreads; ++i) {
-        threads.push_back (std::thread (routine, std::ref (is), std::ref (m_is), 
+        threads.push_back (std::thread (routine, std::ref (ss), std::ref (m_ss), 
                         std::ref (word_position), std::ref (m_word_position), 
                         std::ref (target), std::ref (s_joinable)));
     }
@@ -74,42 +83,92 @@ int main (int argc, char *argv []) {
     return EXIT_SUCCESS;
 }
 
-void routine (std::ifstream &is, std::mutex &m_is, std::size_t &word_position, 
+struct word {
+    std::string word;
+    std::size_t word_end;
+};
+
+const int WORDS_AT_ONCE = 512;
+/* Read WORDS_AT_ONCE words from ss, store in result. Return 1 no words were 
+   extracted, 0 otherwise. */
+int read_words (std::stringstream &ss, std::mutex &m_ss, 
+                std::array<word, WORDS_AT_ONCE> &result) {
+
+    m_ss.lock();
+
+    if (ss.eof()) {
+        m_ss.unlock ();
+        return 1;
+    }
+
+    /* Manually perform 1st iteration to check if there were words. */
+    auto it = result.begin(), end = result.end();
+    ss >> it->word;
+    it->word_end = ss.tellg ();
+    if (it->word.length() == 0) {
+        m_ss.unlock ();
+        return 1;
+    }
+    ++it;
+
+    /* Loop for other words. */
+    for (; it != end; ++it) {
+        ss >> it->word;
+        it->word_end = ss.tellg ();
+    }
+
+    m_ss.unlock ();
+    return 0;
+}
+#if 0
+struct word_parser {
+    const size_t DEFAULT_STRSTRBUF_SIZE = 8192;
+    std::stringstream ss_;
+    std::ifstream &is_;
+    std::mutex &m_is_;
+
+    word_parser (std::ifstream &is, std::mutex &m_is):
+        is_(is), m_is_(m_is)
+    {}
+
+    void refill_strstream () {
+        if (!ss_.eof())
+            return;
+        ss_.
+        char buf [DEFAULT_STRSTRBUF_SIZE];
+    }
+
+    word get_word () {
+        refill_strstream ();
+        ss_ << is_.rdbuf ();
+    }
+};
+#endif
+
+void routine (std::stringstream &ss, std::mutex &m_ss, std::size_t &word_position, 
               std::mutex &m_word_position, const std::string &target, 
               std::counting_semaphore<INT32_MAX> &s_joinable) {
-
-    for (int step = 0;;step++) {
-        /*if (step & 0xF == 0) {
-            m_word_position.lock();
-            std::size_t word_position_copy = word_position;
-            m_word_position.unlock();
-            if (word_position_copy != -1)
-                goto done;
-        }*/
-        std::string word;
-
+    
+    std::array <word, WORDS_AT_ONCE> words;
+    for (;;) {
+        
         /* Read next word. */
-        m_is.lock();
-        is >> word;
-        std::size_t word_end = is.tellg ();
-        m_is.unlock ();
-
-        /* If word is emptystring, we reached eof or some spaces at the end of 
-           file. */
-        if (word.length() == 0) {
+        if (read_words (ss, m_ss, words) == 1)
             goto done;
-        }
 
-        if (word == target) {
+        for (auto it = words.begin(), end = words.end(); it != end; ++it) {
+            if (it->word != target)
+                continue;
+
             /* Answer is either this word's position or position of some other 
             word that another thread is processing now, so filestream can be 
             closed. */
-            m_is.lock();
-            is.seekg (0, is.end);
-            m_is.unlock ();
+            m_ss.lock();
+            ss.str ({});
+            m_ss.unlock ();
 
             /* Calculate where first byte of word was. */
-            std::size_t word_begin = word_end - word.length();
+            std::size_t word_begin = it->word_end - it->word.length();
 
             /* Store an answer if better one wasn't found. */
             m_word_position.lock ();
