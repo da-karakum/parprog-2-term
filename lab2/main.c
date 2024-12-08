@@ -96,16 +96,29 @@ void triagonal_matrix_algo (double const *a, double const *b, double const *c,
 
 void triagonal_matrix_algo_parallel (double const *a, double const *b, 
                         double const *c, double const *d, size_t N, double *y) {
-    if (N & (N+1))
+    if ((N-2) & (N-1))
         return;
 
     double * const buffer = (double *) malloc (2 * N * sizeof (*buffer));
     double *red_a = buffer, *red_b = buffer + N / 2, *red_c = buffer + N, 
            *red_d = buffer + N + N / 2; // Нет! N нечётно, духотааа
-    
-    red_a[0] = a[0]; red_b[0] = b[0]; red_c[0] = c[0]; red_d[0] = d[0];
-    for (;;) {
 
+    for (int k = 2; k < N-2; k += 2) {
+        // reduction
+        red_a[k] = a[k]*a[k-1]/b[k-1];
+        red_b[k] = b[k] - a[k]*c[k-1]/b[k-1] - c[k]*a[k+1]/b[k+1];
+        red_c[k] = c[k]*c[k+1]/b[k+1];
+        red_d[k] = d[k] + a[k]/b[k-1]*d[k-1] + c[k]/b[k+1]*d[k+1];
+    }
+
+    size_t N_ = (N - 1) / 2 + 1;
+    size_t step = 2;
+
+    for (int k = step * 2; k < N - step * 2/*?*/; k += step * 2) {
+        red_a[k] = red_a[k]*red_a[k-step]/red_b[k-step];
+        red_b[k] = red_b[k] - red_a[k]*red_c[k-step]/red_b[k-step] - red_c[k]*red_a[k+step]/red_b[k+step];
+        red_c[k] = red_c[k]*red_c[k+step]/red_b[k+step];
+        red_d[k] = red_d[k] + red_a[k]/red_b[k-step]*red_d[k-step] + red_c[k]/red_b[k+step]*red_d[k+step];
     }
     
 }
