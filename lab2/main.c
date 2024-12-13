@@ -35,20 +35,32 @@ double d2y_right (double *y, double h, size_t M) {
 
 double *newton_linearization (size_t N, double b, double h);
 
+void solve (size_t M, double B, double h) {
+    double * const y = newton_linearization (M, B, h);
+    
+    for (size_t i = 0; i < M; ++i) {
+        printf ("%.17f ", i*h);
+    }
+    printf ("\n");
+    for (size_t i = 0; i < M; ++i) {
+        printf ("%.17f ", y[i]);
+    }
+    printf ("\n");
+    free (y);
+}
 int main (int argc, char *argv[]) {
-    triagonal_matrix_algo_test();
-    return 0;
     if (argc != 2)
         usage (argv[0]);
     size_t M = get_npoints (argv[1]);
 
-
-    double * const y = newton_linearization (M, 1, 1.0 / (M-1));
-    
-    for (size_t i = 0; i < M; ++i) {
-        printf ("%f, ", y[i]);
+    double h = 1.0 / (M-1);
+    for (double B = 0.1; B < 1.05; B += 0.1) {
+        solve (M, B, h);
     }
-    printf ("\n");
+    double Barr[9] = {1.3, 1.4, 1.45, 1.49, 1.5, 1.51, 1.55, 1.6, 1.7};
+    for (int i = 0; i < 9; ++i) {
+        solve (M, Barr[i], h);
+    }
 
 
     return EXIT_SUCCESS;
@@ -73,9 +85,9 @@ int get_npoints (const char *npoints_str) {
 void triagonal_matrix_algo (double const *a, double const *b, double const *c,
                             double const *d, size_t N, double *y) {
     
-    for (int i = 0; i < N; ++i) {
+    /*for (int i = 0; i < N; ++i) {
         printf ("%f y_%d - %f y_%d + %f y_%d = %f\n", a[i], i-1, b[i], i, c[i], i+1, d[i]);
-    }
+    }*/
     double * const buffer = (double *) malloc (2 * N * sizeof (*buffer));
 
     double *alpha = buffer;
@@ -97,10 +109,10 @@ void triagonal_matrix_algo (double const *a, double const *b, double const *c,
 
     free (buffer);
 
-    printf ("y = (");
+    /*printf ("y = (");
     for (size_t i = 0; i < N; ++i)
         printf ("%f, ", y[i]);
-    printf (")\n\n");
+    printf (")\n\n");*/
 }
 
 void triagonal_matrix_algo_parallel (double const *a, double const *b, 
@@ -119,9 +131,9 @@ void triagonal_matrix_algo_parallel (double const *a, double const *b,
     red_a[N-1] = a[N-1]; red_b[N-1] = b[N-1]; red_c[N-1] = c[N-1]; red_d[N-1] = d[N-1]; 
     for (size_t k = 2; k < N-2; k += 2) {
         // reduction
-        red_a[k] = a[k]*a[k-1]/b[k-1];
-        red_b[k] = b[k] - a[k]*c[k-1]/b[k-1] - c[k]*a[k+1]/b[k+1];
-        red_c[k] = c[k]*c[k+1]/b[k+1];
+        red_a[k] = a[k]/b[k-1]*a[k-1];
+        red_b[k] = b[k] - a[k]/b[k-1]*c[k-1] - c[k]/b[k+1]*a[k+1];
+        red_c[k] = c[k]/b[k+1]*c[k+1];
         red_d[k] = d[k] + a[k]/b[k-1]*d[k-1] + c[k]/b[k+1]*d[k+1];
     }
 
@@ -130,16 +142,16 @@ void triagonal_matrix_algo_parallel (double const *a, double const *b,
     for (step = 2; step < (N-1) / 4 /*?*/; step *= 2) {
         int count = 0;
         for (size_t k = step * 2; k < N - step * 2; k += step * 2) {
-            red_a[k] = red_a[k]*red_a[k-step]/red_b[k-step];
-            red_b[k] = red_b[k] - red_a[k]*red_c[k-step]/red_b[k-step] - red_c[k]*red_a[k+step]/red_b[k+step];
-            red_c[k] = red_c[k]*red_c[k+step]/red_b[k+step];
+            red_a[k] = red_a[k]/red_b[k-step]*red_a[k-step];
+            red_b[k] = red_b[k] - red_a[k]/red_b[k-step]*red_c[k-step] - red_c[k]/red_b[k+step]*red_a[k+step];
+            red_c[k] = red_c[k]/red_b[k+step]*red_c[k+step];
             red_d[k] = red_d[k] + red_a[k]/red_b[k-step]*red_d[k-step] + red_c[k]/red_b[k+step]*red_d[k+step];
             count++;
         }
-        printf ("line %d: %u ?= 3\n", __LINE__, count);
+        //printf ("line %d: %u ?= 3\n", __LINE__, count);
     }
 
-    printf ("step = %lu\n", step);
+    //printf ("step = %lu\n", step);
     red_a[1] = red_a[step];
     red_a[2] = red_a[2*step];
     red_a[3] = red_a[3*step];
@@ -184,7 +196,7 @@ void triagonal_matrix_algo_parallel (double const *a, double const *b,
 }
 
 double *newton_linearization (size_t M, double B, double h) {
-    const double EPS = M * 1e-4;
+    const double EPS = M * 1e-8;
     double * const buffer = (double *) malloc (8 * M * sizeof (*buffer));
     double *u = buffer, *v = buffer + M, *a = buffer + 2*M, *b = buffer + 3*M,
            *c = buffer + 4*M, *d = buffer + 5*M, *d2u = buffer + 6*M, 
@@ -198,7 +210,13 @@ double *newton_linearization (size_t M, double B, double h) {
         x += h;
     }
 
-    for (;;) {
+    /*printf ("u = [");
+    for (int m = 0; m < M; ++m) {
+        printf ("%f ", u[m]);
+    }
+    printf ("]\n");*/
+
+    for (;;/*int i = 0; i < 50; ++i*/) {
         // вычислить в v поправку
         /// вычислить d2u
         d2u[0] = d2y_left (u, h);
@@ -211,35 +229,36 @@ double *newton_linearization (size_t M, double B, double h) {
             fu[m] = f(u[m]);
         
         /// подготовить a,b,c,d
-        c[0] = d[0] = a[M-1] = d[M-1] = 0;
+        c[0] = 0; d[0] = 0; a[M-1] = 0; d[M-1] = 0;
         b[0] = -1; b[M-1] = -1;
 
         for (int m = 1; m < M-1; ++m) {
-            a[m] = 1 / (h*h) + 1/12 * fu[m-1];
-            b[m] = 2 / (h*h) - 5/6  * fu[m];
-            c[m] = 1 / (h*h) + 1/12 * fu[m+1];
-            d[m] = 1/12 * (fu[m+1] + fu[m-1] + d2u[m-1] + d2u[m+1]) + 
-                   5/6 * (fu[m] + d2u[m]);
+            a[m] = 1.0 / (h*h) + 1.0/12 * fu[m-1];
+            b[m] = 2.0 / (h*h) - 5.0/6  * fu[m];
+            c[m] = 1.0 / (h*h) + 1.0/12 * fu[m+1];
+            d[m] = 1.0/12 * (fu[m+1] + fu[m-1] - d2u[m-1] - d2u[m+1]) + 
+                   5.0/6 * (fu[m] - d2u[m]);
         }
 
         /// параллельная прогонка
-        triagonal_matrix_algo_parallel (a, b, c, d, M, v);
+        triagonal_matrix_algo (a, b, c, d, M, v);
 
         // вычислить норму поправки
         double discrepancy = 0;
+        //printf ("[");
         for (int m = 0; m < M; ++m) {
-            discrepancy += v[m];
+            discrepancy += fabs (v[m]);
             u[m] += v[m];
+            //printf ("%.10f ", v[m]);
         }
+        //printf ("]\n");
         
-        if (discrepancy < EPS) {
-            free (buffer);
+        if (discrepancy < EPS)
             return u;
-        }
 
     }
 
-
+    return u;
 }
 
 
@@ -270,7 +289,6 @@ void generate_example (double *a, double *b, double *c, double *d, double *y, si
     b[N-1] = randfrom (-1, 1);
     d[N-1] = a[N-1]*y[N-2] - b[N-1]*y[N-1];
 }
-
 
 void triagonal_matrix_algo_test (void) {
     double a[17] = {NAN, -0.0453352430, -0.7892442484, 0.7613985416, -0.4008339901, -0.2048139131, 0.0447129156, 0.0075377566, -0.5105699773, 0.8045634999, -0.7333023454, 0.8465147409, 0.2814253835, 0.9495592313, 0.5131449781, 0.5477298189, 0.0000000000};
