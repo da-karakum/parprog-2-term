@@ -1,8 +1,11 @@
-#include <pthread.h>
+// ./a.out 509 | python3 plot.py
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
 #include <math.h>
+#include <time.h>
+#include <omp.h>
 
 void usage (const char *argv0);
 void triagonal_matrix_algo (double const *a, double const *b, double const *c, 
@@ -75,7 +78,8 @@ int get_npoints (const char *npoints_str) {
     char *end;
     unsigned long res = strtoul (npoints_str, &end, 10);
     errno = 0;
-    if (*end != '\0' || errno == ERANGE || res > __INT32_MAX__) {
+    if (*end != '\0' || errno == ERANGE || res > __INT32_MAX__ || (res - 1) % 4 != 0) {
+
         printf ("Incorrect npoints\n");
         exit (1);
     }
@@ -84,10 +88,7 @@ int get_npoints (const char *npoints_str) {
 
 void triagonal_matrix_algo (double const *a, double const *b, double const *c,
                             double const *d, size_t N, double *y) {
-    
-    /*for (int i = 0; i < N; ++i) {
-        printf ("%f y_%d - %f y_%d + %f y_%d = %f\n", a[i], i-1, b[i], i, c[i], i+1, d[i]);
-    }*/
+
     double * const buffer = (double *) malloc (2 * N * sizeof (*buffer));
 
     double *alpha = buffer;
@@ -108,11 +109,6 @@ void triagonal_matrix_algo (double const *a, double const *b, double const *c,
         y[n] = alpha[n] * y[n+1] + beta[n];
 
     free (buffer);
-
-    /*printf ("y = (");
-    for (size_t i = 0; i < N; ++i)
-        printf ("%f, ", y[i]);
-    printf (")\n\n");*/
 }
 
 void triagonal_matrix_algo_parallel (double const *a, double const *b, 
@@ -148,10 +144,8 @@ void triagonal_matrix_algo_parallel (double const *a, double const *b,
             red_d[k] = red_d[k] + red_a[k]/red_b[k-step]*red_d[k-step] + red_c[k]/red_b[k+step]*red_d[k+step];
             count++;
         }
-        //printf ("line %d: %u ?= 3\n", __LINE__, count);
     }
 
-    //printf ("step = %lu\n", step);
     red_a[1] = red_a[step];
     red_a[2] = red_a[2*step];
     red_a[3] = red_a[3*step];
@@ -186,10 +180,16 @@ void triagonal_matrix_algo_parallel (double const *a, double const *b,
 
     d[4*step-1] -= y[4*step]*c[4*step-1]; 
 
-    triagonal_matrix_algo (a+1, b+1, c+1, d+1, step-1, y+1);
-    triagonal_matrix_algo (a+1+step, b+1+step, c+1+step, d+1+step, step-1, y+1+step);
-    triagonal_matrix_algo (a+1+2*step, b+1+2*step, c+1+2*step, d+1+2*step, step-1, y+1+2*step);
-    triagonal_matrix_algo (a+1+3*step, b+1+3*step, c+1+3*step, d+1+3*step, step-1, y+1+3*step);
+    omp_set_num_threads (4);
+    #pragma omp parallel shared(a,b,c,d,step,y)
+    {
+        #pragma omp for ordered
+        for (int i = 0; i < 4; ++i)
+        {
+            #pragma omp ordered
+            { triagonal_matrix_algo (a+1+i*step, b+1+i*step, c+1+i*step, d+1+i*step, step-1, y+1+i*step); }
+        }
+    }
 
     free (buffer);
 
@@ -210,13 +210,9 @@ double *newton_linearization (size_t M, double B, double h) {
         x += h;
     }
 
-    /*printf ("u = [");
-    for (int m = 0; m < M; ++m) {
-        printf ("%f ", u[m]);
-    }
-    printf ("]\n");*/
 
-    for (;;/*int i = 0; i < 50; ++i*/) {
+
+    for (;;) {
         // вычислить в v поправку
         /// вычислить d2u
         d2u[0] = d2y_left (u, h);
@@ -245,13 +241,10 @@ double *newton_linearization (size_t M, double B, double h) {
 
         // вычислить норму поправки
         double discrepancy = 0;
-        //printf ("[");
         for (int m = 0; m < M; ++m) {
             discrepancy += fabs (v[m]);
             u[m] += v[m];
-            //printf ("%.10f ", v[m]);
         }
-        //printf ("]\n");
         
         if (discrepancy < EPS)
             return u;
